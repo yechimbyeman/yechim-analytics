@@ -30,3 +30,11 @@
 - `src/middleware.ts` — проверка сессии и разрешённого email.
 - `supabase/migrations` — схема базы данных и RLS.
 - `docs/` — архитектура и словарь данных.
+
+
+## Current Supabase project
+- Project ref: `nhdxtixwkysvskdpahxi` (region `ap-southeast-2`).
+- Project URL: `https://nhdxtixwkysvskdpahxi.supabase.co`.
+- The initial schema has been applied and verified: 7 public tables, all with RLS enabled.
+- The `rls_auto_enable()` event-trigger function was inspected; direct execution by `anon` and `authenticated` was revoked. The Supabase security advisor then returned no findings.
+- Set `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from Supabase API Keys and `ALLOWED_EMAIL` to the one Google email permitted to use the dashboard.
