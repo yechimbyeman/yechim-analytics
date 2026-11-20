@@ -24,7 +24,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Validate public Supabase configuration
+      - name: Configure GitHub Pages\n        uses: actions/configure-pages@v5\n      - name: Validate public Supabase configuration
         env:
           SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
