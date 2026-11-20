@@ -58,11 +58,11 @@ async def main() -> None:
     # YECHIM Analytics is intentionally scoped to Yechim Chat only.
     # Even if an old/misconfigured variable contains other chat IDs, they
     # must never be imported into analytics.
-    allowed_chat_ids = {"2100556847"}
+    allowed_chat_ids = {"-1002100556847"}
     chat_ids &= allowed_chat_ids
     if not chat_ids:
         raise SystemExit(
-            "No allowed analytics chat configured. TELEGRAM_CHAT_IDS must include Yechim Chat (2100556847)."
+            "No allowed analytics chat configured. TELEGRAM_CHAT_IDS must include Yechim Chat (-1002100556847)."
         )
 
     supabase_url = required("NEXT_PUBLIC_SUPABASE_URL")
