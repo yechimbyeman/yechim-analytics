@@ -19,6 +19,8 @@ type MessageRow = {
   views_count: number | null;
   reactions: Record<string, number> | null;
   raw_metadata: Record<string, unknown> | null;
+  body: string | null;
+  permalink: string | null;
 };
 
 const CHAT_ID = "2100556847";
@@ -54,7 +56,7 @@ export default async function Dashboard() {
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await supabase
         .from("messages")
-        .select("id,member_id,message_kind,sent_at,reply_to_external_message_id,views_count,reactions,raw_metadata")
+        .select("id,member_id,message_kind,sent_at,reply_to_external_message_id,views_count,reactions,raw_metadata,body,permalink")
         .eq("source_id", source.id)
         .order("sent_at", { ascending: true })
         .range(from, from + pageSize - 1);
@@ -90,8 +92,8 @@ export default async function Dashboard() {
   });
   const uniqueCustomers = new Set(customerMessages.map((message) => message.member_id)).size;
   const replies = messages.filter((message) => !!message.reply_to_external_message_id).length;
-  const publications = messages.filter((message) => message.message_kind === "publication");
-  const staffPostCandidates = messages.filter((message) => message.raw_metadata?.is_staff_authored_non_reply === true).length;
+  const publications = messages.filter((message) => message.message_kind === "publication" || message.raw_metadata?.is_advertising_account === true);
+  const staffPostCandidates = messages.filter((message) => message.raw_metadata?.is_staff_authored_non_reply === true && message.raw_metadata?.is_advertising_account !== true).length;
   const withViews = messages.filter((message) => message.views_count !== null).length;
   const withReactions = messages.filter((message) => !!message.reactions && Object.keys(message.reactions).length > 0).length;
 
@@ -108,6 +110,16 @@ export default async function Dashboard() {
     }).length);
   }
   const maxMonth = Math.max(1, ...monthValues);
+  const publicationMonthValues = monthLabels.map((_, index) => {
+    const offset = 10 - index;
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1));
+    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    return publications.filter((message) => {
+      const shifted = shiftedDate(message.sent_at);
+      return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}` === key;
+    }).length;
+  });
+  const recentPublications = [...publications].sort((a, b) => b.sent_at.localeCompare(a.sent_at)).slice(0, 12);
 
   const clientCounts = new Map<string, number>();
   for (const message of customerMessages) {
@@ -207,13 +219,13 @@ export default async function Dashboard() {
       </div>
 
       <section className="card" id="posts" style={{marginTop:16}}>
-        <div className="section-head"><div><h2 className="card-title">Публикации и рекламная активность</h2><div className="card-desc">Не смешиваем рекламные посты с обычными сообщениями менеджеров</div></div></div>
+        <div className="section-head"><div><h2 className="card-title">Публикации и рекламная активность</h2><div className="card-desc">Публикации @yechimbor отдельно от обращений клиентов · UTC+5</div></div></div>
         <div className="post-grid">
           <div><span>Распознано публикаций</span><b>{formatNumber(publications.length)}</b></div>
           <div><span>Сообщения команды без ответа · кандидаты для проверки</span><b>{formatNumber(staffPostCandidates)}</b></div>
           <div><span>Сообщения с просмотрами</span><b>{formatNumber(withViews)}</b></div>
         </div>
-        <p className="empty-note">В этой супергруппе рекламные сообщения пока не размечены как отдельный тип публикации. Не считаем все сообщения сотрудников рекламой автоматически.</p>
+        <div className="section-head" style={{marginTop:20}}><div><h3 className="card-title">Публикации по месяцам</h3><div className="card-desc">Количество постов от @yechimbor</div></div></div>\n        <div className="live-chart">{publicationMonthValues.map((value,index) => <div className="live-bar-col" key={`post-${monthLabels[index]}`}><div className="live-bar-value">{value || ""}</div><div className="live-bar-track"><div className="live-bar" style={{height:`${Math.max(value > 0 ? 5 : 0, value / Math.max(1,...publicationMonthValues) * 100)}%`}} /></div><div className="live-bar-label">{monthLabels[index]}</div></div>)}</div>\n        <div className="section-head" style={{marginTop:20}}><div><h3 className="card-title">Последние рекламные публикации</h3><div className="card-desc">Текст, дата и ссылка на оригинал в Telegram</div></div></div>\n        {recentPublications.length ? <div className="rank-list">{recentPublications.map((post) => <div className="rank-row" key={post.id} style={{alignItems:"flex-start"}}><div className="rank-name"><b>{new Date(post.sent_at).toLocaleString("ru-RU", {timeZone:"Asia/Tashkent"})}</b><small>{(post.body || "Публикация с медиа").slice(0,220)}</small>{post.permalink && <a href={post.permalink} target="_blank" rel="noreferrer">Открыть пост в Telegram ↗</a>}<small>{post.raw_metadata?.media_type === "photo" ? "Фото" : post.raw_metadata?.media_type === "video" ? "Видео" : post.raw_metadata?.has_media ? "Медиа" : "Текстовая публикация"}</small></div></div>)}</div> : <p className="empty-note">Публикации пока не найдены.</p>}
       </section>
 
       <p className="empty-note">YECHIM Analytics · статистика обновляется после импорта Telegram. Данные других источников исключены.</p>
