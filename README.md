@@ -20,7 +20,7 @@
 6. Открыть `http://localhost:3000` и войти через email + пароль.
 
 ## Настройки доступа
-- В Supabase Auth создан подтверждённый пользователь `yechim.tashkent@gmail.com`.
+- В Supabase Auth создан подтверждённый пользователь 
 - Его UUID добавлен в `public.app_access`.
 - В локальном окружении установить `ALLOWED_EMAIL=yechim.tashkent@gmail.com`.
 - В Supabase оставить включённым Email provider. Google OAuth не требуется.
