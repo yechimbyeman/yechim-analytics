@@ -169,7 +169,25 @@ async def main() -> None:
                 is_advertising_account = sender_id in advertising_account_ids
                 is_native_post = bool(getattr(msg, "post", False)) or is_advertising_account
                 media = getattr(msg, "media", None)
-                media_type = "photo" if getattr(msg, "photo", None) else "video" if getattr(getattr(msg, "document", None), "mime_type", "").startswith("video/") else "document" if media else None
+                document_mime = getattr(getattr(msg, "document", None), "mime_type", "") or ""
+                media_type = "photo" if getattr(msg, "photo", None) else "video" if document_mime.startswith("video/") else "document" if media else None
+                media_storage_path = None
+                media_content_type = None
+                if media_type in {"photo", "video"}:
+                    try:
+                        media_bytes = await client.download_media(msg, file=bytes)
+                        if media_bytes:
+                            media_content_type = "image/jpeg" if media_type == "photo" else (document_mime or "video/mp4")
+                            extension = "jpg" if media_type == "photo" else "mp4"
+                            media_storage_path = f"{source_id}/{msg.id}.{extension}"
+                            db.storage.from_("telegram-ad-media").upload(
+                                media_storage_path,
+                                media_bytes,
+                                {"content-type": media_content_type, "upsert": "true"},
+                            )
+                    except Exception as media_error:
+                        print(f"Media download/upload failed for Telegram message {msg.id}: {media_error}")
+                        media_storage_path = None
                 body = msg.message or ""
                 record = {
                     "source_id": source_id,
@@ -188,6 +206,8 @@ async def main() -> None:
                         "is_bot": is_bot,
                         "is_advertising_account": is_advertising_account,
                         "media_type": media_type,
+                        "media_storage_path": media_storage_path,
+                        "media_content_type": media_content_type,
                         "has_media": bool(media),
                         "is_staff_by_config": sender_id in staff_ids or is_advertising_account,
                         "out": bool(getattr(msg, "out", False)),
