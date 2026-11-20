@@ -29,3 +29,17 @@
 - `src/middleware.ts` — проверка сессии и единственного разрешённого email.
 - `supabase/schema.sql` — схема базы и RLS.
 - `docs/` — архитектура и словарь данных.
+
+
+## Security and database setup
+- Keep the repository private. Never commit .env.local, Telegram .session files, API hashes, OAuth secrets or the Supabase service-role key.
+- The application checks ALLOWED_EMAIL; database tables additionally require the authenticated user's UUID in public.app_access.
+- Run supabase/migrations/0001_initial_schema.sql in the Supabase SQL Editor. After the first Google login, authorize the owner UUID:
+
+```sql
+insert into public.app_access(user_id)
+select id from auth.users where email = 'YOUR_ALLOWED_EMAIL'
+on conflict (user_id) do nothing;
+```
+
+Do not deploy until Google OAuth, the allowlisted email, RLS and HTTPS are configured and tested.
