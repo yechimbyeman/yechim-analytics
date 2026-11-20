@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   });
 
   const { data: { user } } = await supabase.auth.getUser();
-  const allowed = process.env.ALLOWED_EMAIL?.toLowerCase();
+  const allowed = (process.env.ALLOWED_EMAIL || "yechim.tashkent@gmail.com").toLowerCase();
   const isPublicAuthRoute = path === "/login" || path.startsWith("/auth/callback");
 
   if (!user && !isPublicAuthRoute) return NextResponse.redirect(new URL("/login", request.url));
