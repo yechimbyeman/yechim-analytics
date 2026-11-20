@@ -4,7 +4,6 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "export",
   basePath: "/yechim-analytics",
-  assetPrefix: "/yechim-analytics/",
   trailingSlash: true,
   images: { unoptimized: true }
 };
