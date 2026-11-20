@@ -32,7 +32,7 @@ function formatNumber(value: number) {
 }
 
 function initials(value: string) {
-  return value.trim().split(/\\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "К";
+  return value.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "К";
 }
 
 export default async function Dashboard() {
