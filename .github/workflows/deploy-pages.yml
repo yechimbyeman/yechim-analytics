@@ -27,17 +27,17 @@ jobs:
       - name: Configure GitHub Pages\n        uses: actions/configure-pages@v5\n      - name: Validate public Supabase configuration
         env:
           SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           test -n "$SUPABASE_URL" || (echo "Missing repository variable NEXT_PUBLIC_SUPABASE_URL" && exit 1)
-          test -n "$SUPABASE_PUBLISHABLE_KEY" || (echo "Missing repository variable NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" && exit 1)
+          test -n "$SUPABASE_PUBLISHABLE_KEY" || (echo "Missing repository variable NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)" && exit 1)
       - name: Install dependencies
         run: npm install
       - name: Build static site
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
