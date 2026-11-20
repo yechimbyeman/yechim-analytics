@@ -5,7 +5,7 @@
 ## Зафиксированная архитектура
 - GitHub-репозиторий: Private — хранит исходный код.
 - Приложение: Next.js App Router, локальный запуск на личном компьютере; публичный хостинг не используется.
-- Доступ: один владелец — `yechim.tashkent@gmail.com`.
+- Доступ: один владелец — 
 - Авторизация: Supabase Auth, email + пароль; публичной регистрации нет.
 - База данных: Supabase PostgreSQL + Row Level Security.
 - Telegram: отдельный серверный/локальный collector на Python + Telethon.
