@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vercel
+.supabase
+telegram_session*
+*.session
+*.session-journal
+__pycache__/
+.venv/
