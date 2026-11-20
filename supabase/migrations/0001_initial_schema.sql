@@ -1,16 +1,13 @@
 -- YECHIM Analytics: single-owner schema foundation.
+-- No anon access. Authenticated access is additionally gated by app_access + RLS.
 create extension if not exists pgcrypto;
 
-create table if not exists public.app_access (
+create table public.app_access (
   user_id uuid primary key references auth.users(id) on delete cascade,
   created_at timestamptz not null default now()
 );
 
-create or replace function public.is_app_owner()
-returns boolean language sql stable security definer set search_path = public
-as $$ select exists (select 1 from public.app_access where user_id = auth.uid()); $$;
-
-create table if not exists public.sources (
+create table public.sources (
   id uuid primary key default gen_random_uuid(),
   platform text not null check (platform in ('telegram','instagram','website')),
   external_source_id text not null,
@@ -21,7 +18,7 @@ create table if not exists public.sources (
   unique(platform, external_source_id)
 );
 
-create table if not exists public.chat_members (
+create table public.chat_members (
   id uuid primary key default gen_random_uuid(),
   source_id uuid not null references public.sources(id) on delete cascade,
   external_user_id text not null,
@@ -34,7 +31,7 @@ create table if not exists public.chat_members (
   unique(source_id, external_user_id)
 );
 
-create table if not exists public.messages (
+create table public.messages (
   id uuid primary key default gen_random_uuid(),
   source_id uuid not null references public.sources(id) on delete cascade,
   external_message_id text not null,
@@ -52,23 +49,22 @@ create table if not exists public.messages (
   created_at timestamptz not null default now(),
   unique(source_id, external_message_id)
 );
-create index if not exists messages_source_sent_at_idx on public.messages(source_id, sent_at desc);
-create index if not exists messages_member_sent_at_idx on public.messages(member_id, sent_at desc);
-create index if not exists messages_reply_idx on public.messages(source_id, reply_to_external_message_id);
+create index messages_source_sent_at_idx on public.messages(source_id, sent_at desc);
+create index messages_member_sent_at_idx on public.messages(member_id, sent_at desc);
+create index messages_reply_idx on public.messages(source_id, reply_to_external_message_id);
 
-create table if not exists public.request_classifications (
+create table public.request_classifications (
   id uuid primary key default gen_random_uuid(),
-  message_id uuid not null references public.messages(id) on delete cascade,
+  message_id uuid not null unique references public.messages(id) on delete cascade,
   is_customer_request boolean not null default false,
   topic text,
   intent text,
-  confidence numeric(4,3),
+  confidence numeric(4,3) check (confidence is null or (confidence >= 0 and confidence <= 1)),
   request_group_key text,
-  classified_at timestamptz not null default now(),
-  unique(message_id)
+  classified_at timestamptz not null default now()
 );
 
-create table if not exists public.exclusions (
+create table public.exclusions (
   id uuid primary key default gen_random_uuid(),
   source_id uuid not null references public.sources(id) on delete cascade,
   external_user_id text not null,
@@ -78,7 +74,7 @@ create table if not exists public.exclusions (
   unique(source_id, external_user_id)
 );
 
-create table if not exists public.publication_metrics_snapshots (
+create table public.publication_metrics_snapshots (
   id uuid primary key default gen_random_uuid(),
   message_id uuid not null references public.messages(id) on delete cascade,
   captured_at timestamptz not null default now(),
@@ -86,7 +82,7 @@ create table if not exists public.publication_metrics_snapshots (
   forwards_count bigint,
   reactions jsonb not null default '{}'::jsonb
 );
-create index if not exists publication_snapshots_message_time_idx on public.publication_metrics_snapshots(message_id, captured_at desc);
+create index publication_snapshots_message_time_idx on public.publication_metrics_snapshots(message_id, captured_at desc);
 
 alter table public.app_access enable row level security;
 alter table public.sources enable row level security;
@@ -96,14 +92,43 @@ alter table public.request_classifications enable row level security;
 alter table public.exclusions enable row level security;
 alter table public.publication_metrics_snapshots enable row level security;
 
--- The owner row is inserted manually after the first successful Google sign-in.
-create policy "owner reads app access" on public.app_access for select to authenticated using (user_id = auth.uid());
-create policy "owner reads sources" on public.sources for all to authenticated using (public.is_app_owner()) with check (public.is_app_owner());
-create policy "owner reads members" on public.chat_members for all to authenticated using (public.is_app_owner()) with check (public.is_app_owner());
-create policy "owner reads messages" on public.messages for all to authenticated using (public.is_app_owner()) with check (public.is_app_owner());
-create policy "owner reads classifications" on public.request_classifications for all to authenticated using (public.is_app_owner()) with check (public.is_app_owner());
-create policy "owner manages exclusions" on public.exclusions for all to authenticated using (public.is_app_owner()) with check (public.is_app_owner());
-create policy "owner reads snapshots" on public.publication_metrics_snapshots for all to authenticated using (public.is_app_owner()) with check (public.is_app_owner());
+create policy app_access_owner_select on public.app_access
+  for select to authenticated using (user_id = (select auth.uid()));
 
+-- Avoid SECURITY DEFINER authorization helpers in the exposed public schema.
+-- Each table is accessible only when the signed-in user has an explicit owner row.
+create policy sources_owner_all on public.sources
+  for all to authenticated
+  using (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())));
+create policy members_owner_all on public.chat_members
+  for all to authenticated
+  using (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())));
+create policy messages_owner_all on public.messages
+  for all to authenticated
+  using (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())));
+create policy classifications_owner_all on public.request_classifications
+  for all to authenticated
+  using (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())));
+create policy exclusions_owner_all on public.exclusions
+  for all to authenticated
+  using (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())));
+create policy snapshots_owner_all on public.publication_metrics_snapshots
+  for all to authenticated
+  using (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.app_access a where a.user_id = (select auth.uid())));
+
+grant usage on schema public to authenticated;
 grant select on public.app_access to authenticated;
-grant all on public.sources, public.chat_members, public.messages, public.request_classifications, public.exclusions, public.publication_metrics_snapshots to authenticated;
+grant select, insert, update, delete on
+  public.sources, public.chat_members, public.messages,
+  public.request_classifications, public.exclusions,
+  public.publication_metrics_snapshots to authenticated;
+revoke all on public.app_access, public.sources, public.chat_members, public.messages,
+  public.request_classifications, public.exclusions, public.publication_metrics_snapshots from anon;
+
+-- Sequences are not used by these UUID-keyed tables; no sequence grants required.
