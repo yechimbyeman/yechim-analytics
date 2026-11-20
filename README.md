@@ -2,52 +2,53 @@
 
 Закрытая аналитическая платформа маркетинга YECHIM. Первый источник — Telegram Supergroup; Instagram подключается отдельным модулем позже.
 
-## Зафиксированные решения
-- Репозиторий GitHub: Private.
-- Доступ к приложению: один разрешённый пользователь (yechim.tashkent@gmail.com).
-- Авторизация: email + пароль через Supabase Auth; единственный владелец — `yechim.tashkent@gmail.com`.
+## Зафиксированная архитектура
+- GitHub-репозиторий: Private — хранит исходный код.
+- Приложение: Next.js App Router, локальный запуск на личном компьютере; публичный хостинг не используется.
+- Доступ: один владелец — `yechim.tashkent@gmail.com`.
+- Авторизация: Supabase Auth, email + пароль; публичной регистрации нет.
 - База данных: Supabase PostgreSQL + Row Level Security.
-- Веб-приложение: Next.js App Router, запускается локально на личном компьютере; публичный хостинг не используется.
-- Telegram: импорт истории и последующий сбор новых сообщений через серверный collector.
+- Telegram: отдельный серверный/локальный collector на Python + Telethon.
 - Instagram: будущая интеграция через официальный Meta Graph API.
 
 ## Локальный запуск
-1. Использовать Node.js 20+.
-2. Скопировать `.env.example` в `.env.local` и заполнить параметры Supabase.
-3. Выполнить миграцию `supabase/migrations/0001_initial_schema.sql` в Supabase SQL Editor.
-4. В Supabase Auth оставить включённым Email provider; Google OAuth не требуется.
-5. Установить `ALLOWED_EMAIL=yechim.tashkent@gmail.com`.
-6. Убедиться, что пользователь создан в Supabase Auth и его UUID добавлен в `public.app_access`.
-7. Выполнить `npm install`, затем `npm run dev`.
+1. Установить Node.js 20 или новее.
+2. Скопировать `.env.example` в `.env.local`.
+3. Заполнить Supabase URL и publishable key.
+4. Установить зависимости: `npm install`.
+5. Запустить приложение: `npm run dev`.
+6. Открыть `http://localhost:3000` и войти через email + пароль.
+
+## Настройки доступа
+- В Supabase Auth создан подтверждённый пользователь `yechim.tashkent@gmail.com`.
+- Его UUID добавлен в `public.app_access`.
+- В локальном окружении установить `ALLOWED_EMAIL=yechim.tashkent@gmail.com`.
+- В Supabase оставить включённым Email provider. Google OAuth не требуется.
+- Не включать публичную регистрацию.
+- Все аналитические таблицы защищены RLS. Не помещать service-role key в браузер или Git.
+
+## Supabase
+- Project ref: `nhdxtixwkysvskdpahxi`.
+- Region: `ap-southeast-2`.
+- URL: `https://nhdxtixwkysvskdpahxi.supabase.co`.
+- Первичная миграция: `supabase/migrations/0001_initial_schema.sql`.
+- Основные таблицы: `app_access`, `sources`, `chat_members`, `messages`, `request_classifications`, `exclusions`, `publication_metrics_snapshots`.
+
+## Telegram data collection
+- Начальный период импорта: 2026-01-01 — 2026-11-20 (включительно, локальное время чата).
+- Исключать сотрудников и ботов по стабильным Telegram user ID, не по username.
+- Публикации компании сохранять для аналитики публикаций, даже если автор — сотрудник.
+- Считать отдельно все сообщения клиентов и классифицированные клиентские запросы.
+- Сохранять message ID, user ID, timestamp, reply/thread links, реакции и доступные просмотры.
+- Если исторические просмотры недоступны, хранить NULL, а не ноль.
+- Импорт должен быть возобновляемым и идемпотентным.
 
 ## Безопасность
-Не коммитить пароли, API keys, Telegram session-файлы, Supabase service-role key и выгрузки переписки клиентов. Middleware и серверная страница проверяют единственный разрешённый email; RLS дополнительно ограничивает доступ к аналитическим таблицам. Реальные данные появятся после настройки Supabase и Telegram collector.
+Не коммитить `.env.local`, Telegram `.session` файлы, API hash, пароли, Supabase service-role key и выгрузки клиентской переписки. Секреты хранить только локально или в защищённом хранилище сервера.
 
 ## Структура
-- `src/app` — Next.js интерфейс и авторизация email/password.
+- `src/app` — интерфейс Next.js.
 - `src/lib/supabase` — клиенты Supabase.
 - `src/middleware.ts` — проверка сессии и разрешённого email.
-- `supabase/migrations` — схема базы данных и RLS.
-- `docs/` — архитектура и словарь данных.
-
-
-## Current Supabase project
-- Project ref: `nhdxtixwkysvskdpahxi` (region `ap-southeast-2`).
-- Project URL: `https://nhdxtixwkysvskdpahxi.supabase.co`.
-- The initial schema has been applied and verified: 7 public tables, all with RLS enabled.
-- The `rls_auto_enable()` event-trigger function was inspected; direct execution by `anon` and `authenticated` was revoked. The Supabase security advisor then returned no findings.
-- Set `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from Supabase API Keys and `ALLOWED_EMAIL` to the one Google email permitted to use the dashboard.
-
-
-## Авторизация (email + пароль)
-- Вход выполняется через Supabase Auth `signInWithPassword`; Google OAuth для входа не нужен.
-- Публичной регистрации в приложении нет. Единственный пользователь создаётся владельцем в Supabase Dashboard → Authentication → Users.
-- Middleware разрешает только `yechim.tashkent@gmail.com` (или значение `ALLOWED_EMAIL` в окружении деплоя).
-- После создания пользователя добавьте его UUID в `public.app_access`, чтобы открыть доступ к аналитическим таблицам по RLS:
-
-```sql
-insert into public.app_access(user_id)
-select id from auth.users where email = 'yechim.tashkent@gmail.com'
-on conflict (user_id) do nothing;
-```
-- Оставьте Email provider включённым в Supabase Auth. Google OAuth больше не требуется для приложения.
+- `supabase/migrations` — SQL-схема и RLS.
+- `docs/` — документация коллектора и словарь данных.
