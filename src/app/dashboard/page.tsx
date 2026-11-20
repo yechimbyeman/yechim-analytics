@@ -214,7 +214,7 @@ export default function Dashboard() {
               {post.items.length > 1 && <small>Карусель · {post.items.length} элементов</small>}
               {mediaItems.length > 0 && <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:12}}>
                 {mediaItems.map((item) => <a key={item.id} href={String(item.raw_metadata?.media_signed_url)} target="_blank" rel="noreferrer" style={{display:"block"}}>
-                  {item.raw_metadata?.media_type === "video" ? <video src={String(item.raw_metadata.media_signed_url)} controls playsInline style={{width:"100%",borderRadius:10}} /> : <img src={String(item.raw_metadata.media_signed_url)} alt="Фото из рекламной публикации" loading="lazy" style={{width:"100%",height:"auto",borderRadius:10,objectFit:"contain"}} />}
+                  {item.raw_metadata?.media_type === "video" ? <video src={String(item.raw_metadata?.media_signed_url)} controls playsInline style={{width:"100%",borderRadius:10}} /> : <img src={String(item.raw_metadata?.media_signed_url)} alt="Фото из рекламной публикации" loading="lazy" style={{width:"100%",height:"auto",borderRadius:10,objectFit:"contain"}} />}
                 </a>)}
               </div>}
               {mediaCount > mediaItems.length && <small>Не все медиа доступны в хранилище: {mediaItems.length} из {mediaCount}. Повторный импорт может восстановить недостающие файлы.</small>}
