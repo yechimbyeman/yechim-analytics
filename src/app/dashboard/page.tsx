@@ -123,7 +123,7 @@ export default async function Dashboard() {
 
   const cards = [
     ["Клиенты", uniqueCustomers, "Уникальные авторы сообщений", Users],
-    ["Сообщения клиентов", customerMessages.length, "Без сотрудников и ботов", MessageCircle],
+    ["Сообщения клиентов", customerMessages.length, "908 сообщений с определёнными авторами", MessageCircle],
     ["Сообщения команды", staffMessages.length, "Участники, отмеченные как сотрудники", MessagesSquare],
     ["Ответы в чате", replies, "Сообщения с reply-связью", Reply],
   ] as const;
@@ -183,7 +183,7 @@ export default async function Dashboard() {
             <div><span>Сообщения ботов</span><b>{formatNumber(botMessages.length)}</b></div>
             <div><span>Публикации Telegram</span><b>{formatNumber(publications.length)}</b></div>
           </div>
-          <p className="empty-note">Другие группы и личные чаты в этот Dashboard не включаются.</p>
+          <p className="empty-note">Другие группы и личные чаты в этот Dashboard не включаются. Ещё 4 сообщения в истории пока без связанного профиля автора.</p>
         </section>
       </div>
 
