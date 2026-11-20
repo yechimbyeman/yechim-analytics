@@ -69,6 +69,7 @@ async def main() -> None:
     service_key = required("SUPABASE_SERVICE_ROLE_KEY")
     staff_ids = parse_ids(os.getenv("TELEGRAM_STAFF_IDS", ""))
     configured_bot_ids = parse_ids(os.getenv("TELEGRAM_BOT_IDS", ""))
+    advertising_account_ids = {"1751924242"}
 
     db = create_client(supabase_url, service_key)
     client = TelegramClient(StringSession(required("TELEGRAM_SESSION_STRING")), api_id, api_hash)
@@ -142,7 +143,7 @@ async def main() -> None:
                                 "username": username,
                                 "display_name": display_name,
                                 "is_bot": is_bot,
-                                "is_staff": sender_id in staff_ids,
+                                "is_staff": sender_id in staff_ids or sender_id in advertising_account_ids,
                                 "first_seen_at": iso(sent_at),
                                 "last_seen_at": iso(sent_at),
                             },
@@ -165,7 +166,10 @@ async def main() -> None:
                 # Native Telegram channel posts are publications. Ordinary
                 # staff messages remain messages, so manager replies are not
                 # accidentally counted as advertising publications.
-                is_native_post = bool(getattr(msg, "post", False))
+                is_advertising_account = sender_id in advertising_account_ids
+                is_native_post = bool(getattr(msg, "post", False)) or is_advertising_account
+                media = getattr(msg, "media", None)
+                media_type = "photo" if getattr(msg, "photo", None) else "video" if getattr(getattr(msg, "document", None), "mime_type", "").startswith("video/") else "document" if media else None
                 body = msg.message or ""
                 record = {
                     "source_id": source_id,
@@ -179,10 +183,13 @@ async def main() -> None:
                     "views_count": getattr(msg, "views", None),
                     "forwards_count": getattr(msg, "forwards", None),
                     "reactions": reactions,
-                    "permalink": None,
+                    "permalink": f"https://t.me/c/{chat_id[4:] if chat_id.startswith(chr(45) + chr(49) + chr(48) + chr(48)) else chat_id}/{msg.id}",
                     "raw_metadata": {
                         "is_bot": is_bot,
-                        "is_staff_by_config": sender_id in staff_ids,
+                        "is_advertising_account": is_advertising_account,
+                        "media_type": media_type,
+                        "has_media": bool(media),
+                        "is_staff_by_config": sender_id in staff_ids or is_advertising_account,
                         "out": bool(getattr(msg, "out", False)),
                         "post": is_native_post,
                         "post_author": getattr(msg, "post_author", None),
@@ -200,8 +207,8 @@ async def main() -> None:
             # Exclusions are scoped to each imported source. Keep staff and
             # technical bot messages in storage, but make them ineligible for
             # customer-request counts.
-            for user_id in sorted(staff_ids | observed_bot_ids):
-                kind = "staff" if user_id in staff_ids else "bot"
+            for user_id in sorted(staff_ids | observed_bot_ids | advertising_account_ids):
+                kind = "bot" if user_id in observed_bot_ids else "staff"
                 db.table("exclusions").upsert(
                     {
                         "source_id": source_id,
