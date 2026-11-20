@@ -18,6 +18,7 @@ from typing import Any
 from dotenv import load_dotenv
 from supabase import create_client
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.tl.types import User
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,9 +51,12 @@ async def main() -> None:
     bot_ids: set[str] = set()
 
     db = create_client(supabase_url, service_key)
-    client = TelegramClient(str(ROOT / "telegram_session_yechim"), api_id, api_hash)
+    session_string = required("TELEGRAM_SESSION_STRING")
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
 
-    await client.start()
+    await client.connect()
+    if not await client.is_user_authorized():
+        raise SystemExit("TELEGRAM_SESSION_STRING is not authorized. Create a fresh StringSession in Codespaces and update the GitHub secret.")
     try:
         chat = await client.get_entity(int(chat_ref) if chat_ref.lstrip("-").isdigit() else chat_ref)
         chat_id = str(getattr(chat, "id"))
@@ -69,7 +73,7 @@ async def main() -> None:
 
         print(f"Chat: {chat_title} ({chat_id})")
         print(f"Import interval: {START.isoformat()} → {END.isoformat()}")
-        print("Telegram session is local. Follow the Telegram login prompt if this is the first run.")
+        print("Authenticated with encrypted GitHub Actions secret; session file is not persisted on the runner.")
 
         member_cache: dict[str, str] = {}
         imported = 0
