@@ -55,8 +55,15 @@ async def main() -> None:
         legacy_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
         if legacy_chat_id:
             chat_ids = {legacy_chat_id}
+    # YECHIM Analytics is intentionally scoped to Yechim Chat only.
+    # Even if an old/misconfigured variable contains other chat IDs, they
+    # must never be imported into analytics.
+    allowed_chat_ids = {"2100556847"}
+    chat_ids &= allowed_chat_ids
     if not chat_ids:
-        raise SystemExit("Set TELEGRAM_CHAT_IDS (comma-separated) or TELEGRAM_CHAT_ID")
+        raise SystemExit(
+            "No allowed analytics chat configured. TELEGRAM_CHAT_IDS must include Yechim Chat (2100556847)."
+        )
 
     supabase_url = required("NEXT_PUBLIC_SUPABASE_URL")
     service_key = required("SUPABASE_SERVICE_ROLE_KEY")
