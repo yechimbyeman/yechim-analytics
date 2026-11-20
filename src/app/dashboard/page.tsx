@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, FileText, MessageCircle, MessagesSquare, Package, Users, Eye, Heart, Reply, LogOut } from "lucide-react";
+import { Activity, BarChart3, FileText, MessageCircle, MessagesSquare, Package, Users, Eye, Heart, Reply, LogOut, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type MemberRow = { id: string; external_user_id: string; username: string | null; display_name: string | null; is_staff: boolean; is_bot: boolean };
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [source, setSource] = useState<SourceRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +101,11 @@ export default function Dashboard() {
     const member = memberMap.get(id);
     return { id, count, name: member?.display_name || (member?.username ? `@${member.username}` : `Клиент ${member?.external_user_id ?? ""}`), username: member?.username };
   });
+  const selectedClient = topClients.find((client) => client.id === selectedClientId) ?? null;
+  const selectedClientMessages = selectedClientId
+    ? customerMessages.filter((message) => message.member_id === selectedClientId).sort((a, b) => b.sent_at.localeCompare(a.sent_at))
+    : [];
+
   const cards = [
     ["Клиенты", uniqueCustomers, "Уникальные авторы сообщений", Users],
     ["Сообщения клиентов", customerMessages.length, "Сообщения от клиентов", MessageCircle],
@@ -145,9 +151,22 @@ export default function Dashboard() {
           <p className="empty-note">Другие группы и личные чаты в этот Dashboard не включаются.</p>
         </section>
       </div>
+      {selectedClient && <section className="card" id="client-history" style={{marginTop:16}}>
+        <div className="section-head">
+          <div><h2 className="card-title">История клиента: {selectedClient.name}</h2><div className="card-desc">{selectedClient.username ? `@${selectedClient.username} · ` : ""}{formatNumber(selectedClientMessages.length)} сообщений · Yechim Chat</div></div>
+          <button className="login-btn" style={{width:"auto",marginTop:0,padding:"8px 12px"}} onClick={() => setSelectedClientId(null)}><X size={15}/> Закрыть</button>
+        </div>
+        {selectedClientMessages.length ? <div className="rank-list">{selectedClientMessages.map((message) => <article className="rank-row" key={message.id} style={{alignItems:"flex-start",cursor:"default"}}>
+          <div className="rank-name" style={{width:"100%"}}>
+            <b>{new Date(message.sent_at).toLocaleString("ru-RU", {timeZone:"Asia/Tashkent"})}</b>
+            <small style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{message.body || (message.raw_metadata?.has_media ? "Сообщение с медиа без текстовой подписи" : "Текст сообщения не сохранён")}</small>
+            {message.permalink && <a href={message.permalink} target="_blank" rel="noreferrer">Открыть в Telegram ↗</a>}
+          </div>
+        </article>)}</div> : <p className="empty-note">Сообщений этого клиента пока нет.</p>}
+      </section>}
       <div className="content-grid lower-grid">
         <section className="card" id="clients"><div className="section-head"><div><h2 className="card-title">Самые активные клиенты</h2><div className="card-desc">По количеству сообщений в Yechim Chat</div></div></div>
-          {topClients.length ? <div className="rank-list">{topClients.map((client,index) => <div className="rank-row" key={client.id}><span className="rank-num">{index+1}</span><span className="avatar">{initials(client.name)}</span><div className="rank-name"><b>{client.name}</b><small>{client.username ? `@${client.username}` : "Участник Telegram"}</small></div><strong>{formatNumber(client.count)}</strong></div>)}</div> : <p className="empty-note">Пока нет сообщений от клиентов.</p>}
+          {topClients.length ? <div className="rank-list">{topClients.map((client,index) => <div className="rank-row" key={client.id} role="button" tabIndex={0} onClick={() => setSelectedClientId(client.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedClientId(client.id); } }} style={{cursor:"pointer"}} title="Открыть историю сообщений клиента"><span className="rank-num">{index+1}</span><span className="avatar">{initials(client.name)}</span><div className="rank-name"><b>{client.name}</b><small>{client.username ? `@${client.username}` : "Участник Telegram"}</small></div><strong>{formatNumber(client.count)}</strong></div>)}</div> : <p className="empty-note">Пока нет сообщений от клиентов.</p>}
         </section>
         <section className="card" id="requests"><h2 className="card-title">Качество и классификация данных</h2><div className="card-desc">Что уже доступно в истории</div>
           <div className="metric-list"><div><Reply size={16}/><span>Сообщения с ответами</span><b>{formatNumber(replies)}</b></div><div><Eye size={16}/><span>Сообщения с данными о просмотрах</span><b>{formatNumber(withViews)}</b></div><div><Heart size={16}/><span>Сообщения с реакциями</span><b>{formatNumber(withReactions)}</b></div><div><Users size={16}/><span>Сообщения команды</span><b>{formatNumber(staffMessages.length)}</b></div></div>
