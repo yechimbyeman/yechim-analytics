@@ -57,6 +57,16 @@ export default function Dashboard() {
         const { data: memberData, error: memberError } = await supabase.from("chat_members")
           .select("id,external_user_id,username,display_name,is_staff,is_bot").eq("source_id", sourceRow.id);
         if (memberError) throw memberError;
+        const latestAdMessages = allMessages
+          .filter((message) => message.message_kind === "publication" || message.raw_metadata?.is_advertising_account === true)
+          .sort((a, b) => b.sent_at.localeCompare(a.sent_at))
+          .slice(0, 80);
+        await Promise.all(latestAdMessages.map(async (message) => {
+          const path = message.raw_metadata?.media_storage_path;
+          if (typeof path !== "string" || !path) return;
+          const { data: signed } = await supabase.storage.from("telegram-ad-media").createSignedUrl(path, 3600);
+          if (signed?.signedUrl) message.raw_metadata = { ...message.raw_metadata, media_signed_url: signed.signedUrl };
+        }));
         if (!cancelled) { setSource(sourceRow); setMessages(allMessages); setMembers((memberData ?? []) as MemberRow[]); }
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : "Не удалось загрузить данные.");
@@ -94,7 +104,21 @@ export default function Dashboard() {
     const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
     return publications.filter((message) => { const shifted = shiftedDate(message.sent_at); return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}` === key; }).length;
   });
-  const recentPublications = [...publications].sort((a, b) => b.sent_at.localeCompare(a.sent_at)).slice(0, 12);
+  const publicationGroups = (() => {
+    const grouped = new Map<string, MessageRow[]>();
+    for (const post of publications) {
+      const rawGroup = post.raw_metadata?.grouped_id;
+      const groupId = typeof rawGroup === "string" && rawGroup && rawGroup !== "None" ? rawGroup : post.id;
+      grouped.set(groupId, [...(grouped.get(groupId) ?? []), post]);
+    }
+    return [...grouped.entries()].map(([id, items]) => ({
+      id,
+      items: items.sort((a, b) => a.sent_at.localeCompare(b.sent_at)),
+      sent_at: items.reduce((min, item) => item.sent_at < min ? item.sent_at : min, items[0].sent_at),
+      body: items.find((item) => !!item.body?.trim())?.body ?? "",
+      permalink: items.find((item) => !!item.permalink)?.permalink ?? null,
+    })).sort((a, b) => b.sent_at.localeCompare(a.sent_at)).slice(0, 12);
+  })();
   const clientCounts = new Map<string, number>();
   for (const message of customerMessages) if (message.member_id) clientCounts.set(message.member_id, (clientCounts.get(message.member_id) ?? 0) + 1);
   const topClients = [...clientCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id, count]) => {
@@ -179,7 +203,24 @@ export default function Dashboard() {
         <div className="section-head" style={{marginTop:20}}><div><h3 className="card-title">Публикации по месяцам</h3><div className="card-desc">Количество постов от @yechimbor</div></div></div>
         <div className="live-chart">{publicationMonthValues.map((value,index) => <div className="live-bar-col" key={`post-${monthLabels[index]}`}><div className="live-bar-value">{value || ""}</div><div className="live-bar-track"><div className="live-bar" style={{height:`${Math.max(value > 0 ? 5 : 0, value / Math.max(1,...publicationMonthValues) * 100)}%`}} /></div><div className="live-bar-label">{monthLabels[index]}</div></div>)}</div>
         <div className="section-head" style={{marginTop:20}}><div><h3 className="card-title">Последние рекламные публикации</h3><div className="card-desc">Текст, дата и ссылка на оригинал в Telegram</div></div></div>
-        {recentPublications.length ? <div className="rank-list">{recentPublications.map((post) => <div className="rank-row" key={post.id} style={{alignItems:"flex-start"}}><div className="rank-name"><b>{new Date(post.sent_at).toLocaleString("ru-RU", {timeZone:"Asia/Tashkent"})}</b><small>{(post.body || "Публикация с медиа").slice(0,220)}</small>{post.permalink && <a href={post.permalink} target="_blank" rel="noreferrer">Открыть пост в Telegram ↗</a>}<small>{post.raw_metadata?.media_type === "photo" ? "Фото" : post.raw_metadata?.media_type === "video" ? "Видео" : post.raw_metadata?.has_media ? "Медиа" : "Текстовая публикация"}</small></div></div>)}</div> : <p className="empty-note">Публикации пока не найдены.</p>}
+        {publicationGroups.length ? <div className="rank-list">{publicationGroups.map((post) => {
+          const mediaItems = post.items.filter((item) => typeof item.raw_metadata?.media_signed_url === "string");
+          const mediaCount = post.items.filter((item) => item.raw_metadata?.has_media === true).length;
+          return <article className="rank-row" key={post.id} style={{alignItems:"flex-start"}}>
+            <div className="rank-name" style={{width:"100%"}}>
+              <b>{new Date(post.sent_at).toLocaleString("ru-RU", {timeZone:"Asia/Tashkent"})}</b>
+              <small style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{post.body || (mediaCount ? "Рекламная публикация с медиа без текстовой подписи" : "Текст публикации не сохранён")}</small>
+              {post.permalink && <a href={post.permalink} target="_blank" rel="noreferrer">Открыть оригинал в Telegram ↗</a>}
+              {post.items.length > 1 && <small>Карусель · {post.items.length} элементов</small>}
+              {mediaItems.length > 0 && <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:12}}>
+                {mediaItems.map((item) => <a key={item.id} href={String(item.raw_metadata?.media_signed_url)} target="_blank" rel="noreferrer" style={{display:"block"}}>
+                  {item.raw_metadata?.media_type === "video" ? <video src={String(item.raw_metadata.media_signed_url)} controls playsInline style={{width:"100%",borderRadius:10}} /> : <img src={String(item.raw_metadata.media_signed_url)} alt="Фото из рекламной публикации" loading="lazy" style={{width:"100%",height:"auto",borderRadius:10,objectFit:"contain"}} />}
+                </a>)}
+              </div>}
+              {mediaCount > mediaItems.length && <small>Не все медиа доступны в хранилище: {mediaItems.length} из {mediaCount}. Повторный импорт может восстановить недостающие файлы.</small>}
+            </div>
+          </article>;
+        })}</div> : <p className="empty-note">Публикации пока не найдены.</p>}
       </section>
       <p className="empty-note">YECHIM Analytics · статистика обновляется после импорта Telegram. Данные других источников исключены.</p>
     </main>
