@@ -39,7 +39,10 @@ jobs:
       - name: Install exporter dependencies
         run: |
           python -m pip install "telethon==1.42.0" "supabase==2.15.3" "Pillow==12.0.0"
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
           ffmpeg -version
+          ffprobe -version
       - name: Export public channel into private storage
         run: |
           python -m py_compile collector/telegram_brandbook_export.py
