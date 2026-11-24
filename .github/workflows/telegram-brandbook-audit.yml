@@ -1,0 +1,46 @@
+name: YECHIM BrandBook - Telegram audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      audit_from:
+        description: "Start date (YYYY-MM-DD, Tashkent)"
+        required: true
+        default: "2023-01-01"
+      audit_to:
+        description: "End date exclusive (YYYY-MM-DD, Tashkent)"
+        required: true
+        default: "2026-11-25"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yechim-brandbook-audit
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+      TELEGRAM_SESSION_STRING: ${{ secrets.TELEGRAM_SESSION_STRING }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      AUDIT_FROM: ${{ inputs.audit_from }}
+      AUDIT_TO: ${{ inputs.audit_to }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exporter dependencies
+        run: |
+          python -m pip install "telethon==1.42.0" "supabase==2.15.3" "Pillow==12.0.0"
+          ffmpeg -version
+      - name: Export public channel into private storage
+        run: |
+          python -m py_compile collector/telegram_brandbook_export.py
+          python collector/telegram_brandbook_export.py
