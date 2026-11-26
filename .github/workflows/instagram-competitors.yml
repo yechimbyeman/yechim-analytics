@@ -1,0 +1,56 @@
+name: Instagram competitor collection
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: instagram-competitor-collection
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Collect public posts with capped charge
+        env:
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request, urllib.parse, csv
+          from pathlib import Path
+          token = os.environ['APIFY_API_TOKEN']
+          if not token:
+              raise SystemExit('APIFY_API_TOKEN is missing')
+          base = 'https://api.apify.com/v2/'
+          def request(path, body=None):
+              headers = {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}
+              req = urllib.request.Request(base + path, headers=headers, data=json.dumps(body).encode() if body is not None else None)
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return json.load(response)
+          handles = ["xsoff_uz","tutti.uz","aosite.uzbekistan","kavi.furnitura","evim_uzb","lumenlux.uz","muller.uz","nisko_uz","kis.uz","cabio.uz","promasterskd","sagagroup.uz","stimul_gold","homemarketuz","luminor_hardware","ziro.home","costa_furniture.uz","xush.co","gtv_uzbekistan","fsl_official_uz","promebel_khujand","nois.su","furnitt.co","alkan_furniture_official","kitchensystems","ardotex","profikz.kz","confirmat_kz","emc.kz","mebelschik_kz","furniline.kz","blum_group","hettich_official","haefele_de","grassusa","revashelf","richelieuhardware","higoldhardwareofficial","pullcast_jewelryhardware","busterandpunch"]
+          payload = {'directUrls': ['https://www.instagram.com/' + h + '/' for h in handles], 'resultsType': 'posts', 'resultsLimit': 100, 'onlyPostsNewerThan': '90 days', 'addParentData': False}
+          run = request('acts/apify~instagram-scraper/runs?maxTotalChargeUsd=3&timeout=1500', payload)['data']
+          print('Apify run:', run['id'])
+          for _ in range(100):
+              run = request('actor-runs/' + run['id'])['data']
+              if run['status'] in ('SUCCEEDED', 'FAILED', 'ABORTED', 'TIMED-OUT'):
+                  break
+              time.sleep(15)
+          print('Status:', run['status'], 'Usage USD:', run.get('usageTotalUsd'))
+          out = Path('instagram-export')
+          out.mkdir()
+          (out/'run.json').write_text(json.dumps({'id':run['id'],'status':run['status'],'usageTotalUsd':run.get('usageTotalUsd'),'requestedProfiles':handles},ensure_ascii=False))
+          rows = request('datasets/' + run['defaultDatasetId'] + '/items?clean=true&limit=5000')
+          fields = ['inputUrl','ownerUsername','id','shortCode','timestamp','type','caption','url','videoPlayCount','videoViewCount','likesCount','commentsCount','videoDuration','error','errorDescription']
+          with (out/'posts.csv').open('w',encoding='utf-8-sig',newline='') as f:
+              writer=csv.DictWriter(f,fieldnames=fields,extrasaction='ignore')
+              writer.writeheader()
+              writer.writerows(rows)
+          print('Rows:',len(rows))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: instagram-competitor-posts
+          path: instagram-export/
+          retention-days: 7
